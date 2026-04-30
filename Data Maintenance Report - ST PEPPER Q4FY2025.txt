@@ -1,0 +1,132 @@
+==========================================================================================================
+Program Name : Data Maintenance Report - ST PEPPER Q4FY2025
+Programmer   : K.Mutua
+Created      : 3/10/2026
+Last Updated : 4/30/2026
+Purpose      : The purpose of this Snowflake code is to query the claims data and generate a
+data maintenance file for the current reporting period Q4FY2025. The goal is to confirm that the data reflects stable, consistent quarter level patterns.
+
+ High-Level Steps:
+    1. Get current release claims data
+    2. Create counts of claims, NPIs, OSCARs, Jurisdictions, States etc.
+    3. The counts are used to create bar graphs
+    4. QA the Data Report to ensure it is correct 
+
+Data Sources:
+   - adm_prd.cms_adm_cbr_pepper.array_flags_st_pepper_history run_id ('db9a648a-386d-4c15-9a6b-    1008208b14f0')
+   - ADM.PRD.CMS_ADM_CBR_PEPPER.ARRAY_FLAGS_ST_PEPPER
+   
+ Output:
+   - Data Maintenance Trend Charts for Quarter Ending Q3 2025 and Q4 2025
+
+ Assumptions & Constraints:
+   - None
+
+ Part 1 --- Query Previous Claims data 
+=========================================================================================================== 
+Step 1: Get current release claims data for releaseQ3FY2025    
+============================================================================================================
+
+----Create temp table for Index data previous last 10 quarters
+
+-----------Get Run-ID from "cbr_pepper_extract_history"-------------------\
+
+select * from adm_prd.cms_adm_cbr_pepper.cbr_pepper_extract_history
+ 
+-----------Get the data table based on the run-id using "array_flags_st_pepper_history"-----------
+
+Create or replace temp  table Release_ReleaseNum AS 
+select * from adm_prd.cms_adm_cbr_pepper.array_flags_st_pepper_history where
+run_id in ('db9a648a-386d-4c15-9a6b-1008208b14f0');
+
+---VIEW TABLE  
+
+SELECT 
+* 
+FROM 
+Release_ReleaseNum 
+LIMIT 100 
+
+DESC TABLE Release_ReleaseNum 
+==========================================================================================================
+/*Step 2: Counts of claims, NPIs, OSCARs, Jurisdictions, States for Fiscal Years and Fiscal Quarters*/  ===========================================================================================================
+  
+SELECT
+    DISTINCT FISCAL_YEAR, 
+    FISCAL_QUARTER,
+    FISCAL_YEAR||FISCAL_QUARTER AS YEAR_QUARTER,
+    COUNT(DISTINCT CLM_CNTL_NUM) AS NUM_OF_CLAIMS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_OSCAR_NUM) AS NUM_OF_HOSPITALS
+FROM Release_ReleaseNum 
+WHERE CLM_THRU_DT BETWEEN '2023-01-01' AND '2025-06-30'
+GROUP BY FISCAL_YEAR, 
+         FISCAL_QUARTER
+ORDER BY YEAR_QUARTER
+
+/* Do an Overall Distinct Count of Claims, NPIs, Oscars, Beneficiaries ,Jurisdictions and States*/
+    
+SELECT 
+    COUNT(DISTINCT CLM_CNTL_NUM) as NUM_OF_CLAIMS,
+    COUNT(DISTINCT CLM_CNTRCTR_JRSDCTN_CD) as NUM_OF_JURIS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_OSCAR_NUM) AS NUM_OF_HOSPITALS,
+    COUNT (DISTINCT BENE_SK )AS NUM_OF_BENEFICIARIES,
+    COUNT (DISTINCT GEO_USPS_STATE_CD ) AS NUM_OF_STATES
+FROM 
+    Release_ReleaseNum 
+WHERE CLM_THRU_DT BETWEEN '2023-01-01' AND '2025-06-30'
+        
+Part 2 --- Query Current Claims data 
+============================================================================================================
+/*Step 1: Get current release claims data for current releaseQ4FY2025*/ 
+============================================================================================================
+
+CREATE OR REPLACE TEMP TABLE ADM_PRD.CMS_ADM_CBR.claims_data_table AS
+SELECT 
+*
+FROM ADM_PRD.CMS_ADM_CBR_PEPPER.ARRAY_FLAGS_ST_PEPPER;
+
+-- View Temp table 
+
+SELECT 
+* 
+FROM ADM_PRD.CMS_ADM_CBR.claims_data_table 
+LIMIT 100 
+
+DESC TABLE  ADM_PRD.CMS_ADM_CBR.claims_data_table 
+
+==========================================================================================================
+Step 2: Counts of Claims, NPIs, OSCARs, Jurisdictions, States etc.*/   
+============================================================================================================
+
+SELECT
+'Q' || CEIL(MONTH(DATEADD(MONTH,3,CLM_THRU_DT))/3)
+|| ' ' || YEAR(DATEADD(MONTH,3,CLM_THRU_DT)) AS PEPPER_QUARTER,
+COUNT(DISTINCT CLM_CNTL_NUM) AS NUM_OF_CLAIMS,
+COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+COUNT(DISTINCT CLM_BLG_PRVDR_OSCAR_NUM) AS NUM_OF_HOSPITALS
+FROM claims_data_table
+WHERE CLM_THRU_DT BETWEEN '2023-01-01' AND '2025-06-30'
+GROUP BY 1
+ORDER BY 
+MIN(DATE_TRUNC('QUARTER', DATEADD(MONTH,3,CLM_THRU_DT)));
+
+--- Simple Alternative Query 
+
+SELECT
+    DISTINCT FISCAL_YEAR, 
+    FISCAL_QUARTER,
+    FISCAL_YEAR||FISCAL_QUARTER AS Year_Quarter,
+    COUNT(DISTINCT CLM_CNTL_NUM) AS NUM_OF_CLAIMS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_OSCAR_NUM) AS NUM_OF_HOSPITALS
+FROM ADM_PRD.CMS_ADM_CBR.claims_data_table 
+GROUP BY FISCAL_YEAR, 
+         FISCAL_QUARTER
+ORDER BY Year_Quarter ASC
+    
+************************************************************************************************************************************************************************************************************************************************************************************
+  /* End of Data Maintenance Report */ 
+==========================================================================================================================================
+
