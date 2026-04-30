@@ -1,0 +1,258 @@
+==========================================================================================================================================
+==========================================================================================================================================
+ Program Name : Data Maintenance - CAH PEPPER Q4FY2025
+ Author       : K.Mutua
+ Created      : 3/10/2026
+ Last Updated : 3/12/2026
+ Purpose       : The purpose of this Snowflake code is to query the claims data and generate a
+data maintenance file for the current reporting period Q4FY2025. The goal is to confirm that the data reflects stable, consistent quarter level patterns.
+
+ High-Level Steps:
+    1. Get current release claims data
+    2. Create counts of claims, NPIs, OSCARs, Jurisdictions, States etc.
+    3. The counts are used to create bar graphs
+    4. QA the Data Report to ensure it is correct 
+/*STEPS
+1.Query Current Claims data
+2.Create counts of claims, NPIs, OSCARs, Jurisdictions, States etc
+3.Query Old Claims
+4,MERGE ABOVE TABLE TO CREATE ONE TABLE
+5,CREATE COUNTS THE TABLE Mergeddata2022newdate*/
+
+ Data Sources:
+   - ADM_PRD.CMS_ADM_CBR_PEPPER.ARRAY_FLAGS_CAH_PEPPER
+   
+ Output:
+   - Data Maintenace Trend Charts for YEAR ending Q3 2025 and Q4 2025
+
+ Assumptions & Constraints:
+   - None
+
+=========================================================================================================================================
+/*STEP 1 --- Query Current Claims data 
+=========================================================================================================================================
+/*Get current release claims data for current releaseQ4FY2025*/ 
+=========================================================================================================================================
+CREATE OR REPLACE TEMP TABLE ADM_PRD.CMS_ADM_CBR.claims_data_table AS
+SELECT *
+FROM ADM_PRD.CMS_ADM_CBR_PEPPER.ARRAY_FLAGS_CAH_PEPPER
+
+-- View Temp table 
+
+SELECT * FROM ADM_PRD.CMS_ADM_CBR.claims_data_table 
+LIMIT 100 
+
+DESC TABLE ADM_PRD.CMS_ADM_CBR.claims_data_table 
+
+==========================================================================================================================================
+/*STEP 2: Create counts of claims, NPIs, OSCARs, Jurisdictions, States etc.*/   
+==========================================================================================================================================
+
+SELECT
+'Q' || CEIL(MONTH(DATEADD(MONTH,3,CLM_THRU_DT))/3)
+|| ' ' || YEAR(DATEADD(MONTH,3,CLM_THRU_DT)) AS PEPPER_QUARTER,
+COUNT(DISTINCT CLM_CNTL_NUM) AS NUM_OF_CLAIMS,
+COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+COUNT(DISTINCT CLM_BLG_PRVDR_OSCAR_NUM) AS NUM_OF_HOSPITALS,
+COUNT (DISTINCT BENE_SK)AS BENEFICIARIES 
+FROM ADM_PRD.CMS_ADM_CBR.claims_data_table
+WHERE fiscal_year = 2022
+GROUP BY 1
+ORDER BY 
+MIN(DATE_TRUNC('QUARTER', DATEADD(MONTH,3,CLM_THRU_DT)));
+
+---Alternative Query 
+
+SELECT
+DISTINCT FISCAL_YEAR, 
+    FISCAL_QUARTER,
+    FISCAL_YEAR||FISCAL_QUARTER AS Year_Quarter,
+    COUNT(DISTINCT CLM_CNTL_NUM) AS NUM_OF_CLAIMS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_OSCAR_NUM) AS NUM_OF_HOSPITALS
+FROM ADM_PRD.CMS_ADM_CBR.claims_data_table
+WHERE FISCAL_YEAR = 2022
+GROUP BY FISCAL_YEAR, 
+     FISCAL_QUARTER
+ORDER BY Year_Quarter
+
+--- Do counts of Jurisdictions,states,claims, providers and beneficiaries for the past 3 years (2023,2024,2024)
+
+ SELECT 
+    DISTINCT FISCAL_YEAR,
+    COUNT (DISTINCT CLM_CNTRCTR_JRSDCTN_CD )AS NUM_0F_JURISDICTIONS,
+    COUNT (DISTINCT GEO_USPS_STATE_CD ) AS NUM_OF_STATES,
+    COUNT(DISTINCT CLM_CNTL_NUM) as NUM_OF_CLAIMS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+    COUNT(DISTINCT CLM_BLG_PRVDR_OSCAR_NUM) AS NUM_OF_HOSPITALS,
+    count (DISTINCT BENE_SK) AS NUM_ODF_BENEFICIARIES 
+    FROM 
+    ADM_PRD.CMS_ADM_CBR.claims_data_table
+    WHERE fiscal_year in (2023,2024,2025) 
+    GROUP BY fiscal_year
+    ORDER BY fiscal_year ASC
+    
+==========================================================================================================================================
+/*STEP 3 Query Old Claims*/
+==========================================================================================================================================
+
+CREATE OR REPLACE temp table old_data1 AS 
+SELECT 
+*
+FROM 
+ADM_PRD.CMS_ADM_CBR.OLD_CAH_3_CAH2020Q4
+
+---view table 
+SELECT
+*
+FROM
+old_data1
+LIMIT 100
+
+SELECT
+    COUNT (DISTINCT JUR_ID),
+    COUNT (DISTINCT HSP_ID ) AS NUM_OF_STATES,
+    COUNT(DISTINCT HSE_UNIQUE_ID) as NUM_OF_CLAIMS,
+    COUNT(DISTINCT HSP_ID) AS NUM_OF_HOSPITALS,
+    count (DISTINCT BENE_CLM_NUM) AS NUM_ODF_BENEFICIARIES 
+FROM 
+old_data1
+    
+
+CREATE OR REPLACE temp table old_data2 AS 
+SELECT 
+*
+FROM 
+ADM_PRD.CMS_ADM_CBR.OLD_CAH_3_CAH2021Q4
+
+SELECT 
+*
+FROM 
+old_data2
+LIMIT 100
+
+SELECT
+    COUNT (DISTINCT JUR_ID )AS NUM_0F_JURISDICTIONS,
+    COUNT (DISTINCT STATE_CODE ) AS NUM_OF_STATES,
+    ---COUNT(DISTINCT CLM_CNTL_NUM) as NUM_OF_CLAIMS,
+    ---COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+    COUNT(DISTINCT HSP_ID) AS NUM_OF_HOSPITALS,
+    count (DISTINCT BENE_CLM_NUM) AS NUM_ODF_BENEFICIARIES 
+FROM
+old_data2
+  
+  
+CREATE OR REPLACE temp table old_data3 AS 
+SELECT 
+*
+FROM 
+ADM_PRD.CMS_ADM_CBR.OLD_CAH_3_CAH2022Q4
+
+SELECT 
+*
+FROM 
+old_data3
+LIMIT 100
+
+SELECT 
+    COUNT (DISTINCT JUR_ID )AS NUM_0F_JURISDICTIONS,
+    COUNT (DISTINCT STATE_CODE ) AS NUM_OF_STATES,
+    ---COUNT(DISTINCT CLM_CNTL_NUM) as NUM_OF_CLAIMS,
+    ---COUNT(DISTINCT CLM_BLG_PRVDR_NPI_NUM) AS NUM_OF_PROVIDERS,
+    COUNT(DISTINCT HSP_ID) AS NUM_OF_HOSPITALS,
+    count (DISTINCT BENE_CLM_NUM) AS NUM_ODF_BENEFICIARIES 
+FROM
+old_data3
+========================================================================================================================================
+/*STEP 4 MERGE ABOVE TABLE TO CREATE ONE TABLE */
+========================================================================================================================================
+
+Create or Replace Temp table Mergeddata2022
+AS
+SELECT *
+FROM 
+old_data1
+
+UNION 
+
+SELECT *
+FROM 
+old_data2 
+
+UNION 
+
+SELECT *
+FROM
+old_data3
+
+DESC TABLE Mergeddata2022
+
+ SELECT * 
+ FROM
+ Mergeddata2022
+ LIMIT 200 
+
+
+ CREATE OR REPLACE TEMP TABLE Mergeddata2022newdate
+ AS
+ SELECT
+ *,
+ CAST (HSE_CLM_THRU_DT AS DATE)AS HSE_CLM_THRU_DT_DATE
+ FROM
+ Mergeddata2022
+
+-- VIEW TABLE & SIMPLE QA TO VALIDATE MERGED TABLE 
+
+DESC TABLE Mergeddata2022newdate
+
+SELECT
+*
+FROM
+Mergeddata2022newdate
+LIMIT 200
+
+SELECT count(*)
+FROM
+old_data1
+
+SELECT 
+count (*)
+FROM
+old_data2 
+
+SELECT count (*)
+FROM
+old_data3 
+
+SELECT 
+count (DISTINCT HSE_UNIQUE_ID )
+FROM
+old_data1
+
+SELECT 
+MIN (HSE_CLM_THRU_DT_DATE),
+max (HSE_CLM_THRU_DT_DATE)
+FROM
+Mergeddata2022newdate
+
+
+========================================================================================================================================
+/*STEPT 5 CREATE COUNTS THE TABLE Mergeddata2022newdate*/
+========================================================================================================================================
+SELECT
+CASE 
+WHEN HSE_CLM_THRU_DT_DATE between '2019-10-01' and '2020-09-30' THEN 'END OF 2020'
+WHEN HSE_CLM_THRU_DT_DATE between '2020-10-01' and '2021-09-30' THEN 'END OF 2021'
+WHEN HSE_CLM_THRU_DT_DATE between '2021-10-01' and '2022-09-30'THEN 'END OF 2022'
+END AS FISCAL_YEAR, 
+COUNT (DISTINCT JUR_ID)AS JURISDICTIONS,
+COUNT (DISTINCT STATE_CODE ) AS STATES,
+COUNT(DISTINCT HSE_UNIQUE_ID) as CLAIMS,
+COUNT(DISTINCT HSP_ID) AS HOSPITALS,
+COUNT (DISTINCT BENE_CLM_NUM) AS BENEFICIARIES 
+FROM
+Mergeddata2022newdate
+WHERE HSE_CLM_THRU_DT_DATE between '2019-10-01' and '2022-09-30'
+GROUP BY 1
+ORDER BY 1 ASC
+ 
